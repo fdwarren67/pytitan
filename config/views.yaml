@@ -1,0 +1,10 @@
+# views.yaml
+entities:
+  County:
+    view: PLAYGROUND.STYX.CM_COUNTY
+
+  State:
+    view: PLAYGROUND.STYX.CM_STATE
+
+  StatePlane:
+    view: PLAYGROUND.STYX.CM_STATE_PLANE
