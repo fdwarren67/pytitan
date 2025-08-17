@@ -1,5 +1,3 @@
-import os
-from functools import lru_cache
 from typing import Dict, Any, List, Set
 
 import os, logging, httpx, jwt
@@ -10,45 +8,38 @@ from jwt import PyJWKClient
 
 log = logging.getLogger("auth")
 
-GOOGLE_ISS = "https://accounts.google.com"
+ACCEPTED_ISS = ("accounts.google.com", "https://accounts.google.com")
+JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")  
-
-bearer = HTTPBearer(auto_error=True)
-
-@lru_cache(maxsize=1)
-def _discovery():
-    with httpx.Client(timeout=5) as c:
-        r = c.get(DISCOVERY_URL); r.raise_for_status(); return r.json()
-
-JWKS_URI = _discovery()["jwks_uri"]
-jwks_client = PyJWKClient(JWKS_URI)
 ALGS = ("RS256",)
 
-def verify_google_id_token(
-    credentials: HTTPAuthorizationCredentials = Security(bearer),
-):
-    token = credentials.credentials
+jwks_client = PyJWKClient(JWKS_URL)
+
+bearer = HTTPBearer(auto_error=False)
+
+def verify_google_id_token(token: str) -> dict:
     try:
-        # Quick sanity: header & payload (no signature check yet)
-        hdr = jwt.get_unverified_header(token)
+        # Quick sanity (no signature): check iss/aud early
         body = jwt.decode(token, options={"verify_signature": False})
-        if body.get("iss") != GOOGLE_ISS:
-            log.warning("Bad iss: %s", body.get("iss"))
+        iss = body.get("iss")
+        if iss not in ACCEPTED_ISS:
+            log.warning("Bad iss: %s", iss)
             raise HTTPException(status_code=401, detail="Bad issuer")
+
         aud = body.get("aud")
         if GOOGLE_CLIENT_ID and aud != GOOGLE_CLIENT_ID:
             log.warning("Bad aud: %s (expected %s)", aud, GOOGLE_CLIENT_ID)
             raise HTTPException(status_code=401, detail="Bad audience")
 
-        # Signature verification
-        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        # Signature verification against Google JWKS
+        signing_key = jwks_client.get_signing_key_from_jwt(token).key
         claims = jwt.decode(
             token,
-            signing_key.key,
+            signing_key,
             algorithms=ALGS,
             audience=GOOGLE_CLIENT_ID,
-            issuer=GOOGLE_ISS,
+            issuer=ACCEPTED_ISS,
             options={"require": ["exp", "iat", "aud", "iss"]},
         )
 
@@ -59,10 +50,9 @@ def verify_google_id_token(
     except HTTPException:
         raise
     except Exception as e:
-        log.exception("Token verification failed: %s", e)
+        log.exception("Google ID token verification failed: %s", e)
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-# Simple role mapping example (replace with DB-based lookup)
 def _roles_for(claims: Dict[str, Any]) -> Set[str]:
     email = (claims.get("email") or "").lower()
     by_email = {

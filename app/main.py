@@ -16,7 +16,7 @@ from .myfilter import (
     FilterCollection, FilterExpression, Operator,  # for validation
 )
 from .myquery import build_select_from_search
-from .google_oidc import verify_google_id_token, require_roles
+from .myauth import require_roles
 
 VIEWS_PATH = Path(os.getenv("VIEWS_FILE", "config/views.yaml"))
 CACHE_PATH = Path(os.getenv("COLUMNS_CACHE_FILE", "config/columns_cache.json"))
@@ -235,15 +235,25 @@ def _cap_page_size(entity: str, page_size: int, reg: RegistryEntry) -> int:
     return min(page_size, cap)
 
 # --------------------------- FastAPI app ----------------------------
-app = FastAPI(title="QueryBuilder Service", version="1.4.0")
+app = FastAPI(title="Data Service", version="1.4.0")
 
+from .myrequire import require_auth
+from .myroutes import router as auth_public
+from .myroutes import router as api_router
+
+app.include_router(auth_public)
+app.include_router(api_router, dependencies=[Depends(require_auth)])
+
+origins_raw = os.getenv("CORS_ALLOW_ORIGINS", "")
+origins = [o.strip() for o in origins_raw.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ALLOW_ORIGINS", "*").split(","),
-    allow_credentials=True,
+    allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,  
 )
+
 
 REG = Registry()
 
@@ -404,9 +414,5 @@ def reload_registry():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/me")
-def me(claims = Depends(verify_google_id_token)):
-    return {
-        "sub": claims.get("sub"),
-        "email": claims.get("email"),
-        "name": claims.get("name"),
-    }
+def me(claims = Depends(require_auth)):
+    return {"sub": claims["sub"], "email": claims.get("email"), "roles": claims.get("roles", [])}
