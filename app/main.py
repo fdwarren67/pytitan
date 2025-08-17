@@ -17,6 +17,9 @@ from .myfilter import (
 )
 from .myquery import build_select_from_search
 from .myauth import require_roles
+from .myrequire import require_auth, require_roles_access
+from .myroutes import router as auth_public
+
 
 VIEWS_PATH = Path(os.getenv("VIEWS_FILE", "config/views.yaml"))
 CACHE_PATH = Path(os.getenv("COLUMNS_CACHE_FILE", "config/columns_cache.json"))
@@ -234,15 +237,10 @@ def _cap_page_size(entity: str, page_size: int, reg: RegistryEntry) -> int:
         return min(100, cap)  # nice default
     return min(page_size, cap)
 
-# --------------------------- FastAPI app ----------------------------
+
 app = FastAPI(title="Data Service", version="1.4.0")
 
-from .myrequire import require_auth
-from .myroutes import router as auth_public
-from .myroutes import router as api_router
-
 app.include_router(auth_public)
-app.include_router(api_router, dependencies=[Depends(require_auth)])
 
 origins_raw = os.getenv("CORS_ALLOW_ORIGINS", "")
 origins = [o.strip() for o in origins_raw.split(",") if o.strip()]
@@ -266,7 +264,7 @@ def _startup():
 def health():
     return {"ok": True, "entities": list(REG.entities_cfg.keys())}
 
-@app.post("/sql", dependencies=[Depends(require_roles(["read:data"]))])
+@app.post("/sql", dependencies=[Depends(require_roles_access(["read:data"]))])
 def build_query(
     payload: dict = Body(..., description="SearchModel in camelCase JSON"),
     paramstyle: str = "pyformat",
@@ -311,7 +309,7 @@ def build_query(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/search", dependencies=[Depends(require_roles(["read:data"]))])
+@app.post("/search", dependencies=[Depends(require_roles_access(["read:data"]))])
 def search(
     payload: dict = Body(..., description="SearchModel in camelCase JSON"),
     paramstyle: str = "pyformat",
@@ -355,7 +353,7 @@ def search(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.get("/entities", dependencies=[Depends(require_roles(["read:data"]))])
+@app.get("/entities", dependencies=[Depends(require_roles_access(["read:data"]))])
 def list_entities(
     include_columns: bool = True,
     ensure: bool = False,
