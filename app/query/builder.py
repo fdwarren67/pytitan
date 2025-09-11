@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence, Tuple, Union, Iterable, Optional
 import re
 
-from .myfilter import (
+from ..filters import (
     FilterCollection,
     FilterExpression,
     Operator,
@@ -30,7 +30,7 @@ def _quote_dotted_identifier(name: str, *, quote_identifiers: bool) -> str:
 
 def _escape_like(value: str) -> str:
     """
-    Escape \, %, _ in LIKE patterns. We'll use ESCAPE '\\' in SQL.
+    Escape \\, %, _ in LIKE patterns. We'll use ESCAPE '\\\\' in SQL.
     """
     value = value.replace("\\", "\\\\")
     value = value.replace("%", "\\%").replace("_", "\\_")

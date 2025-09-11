@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from .mysession import verify_access
+from ..session import verify_access
 
 bearer = HTTPBearer(auto_error=False)
 

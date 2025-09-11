@@ -13,20 +13,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Any, List
 from decimal import Decimal
 
-from .myfilter import parse_search_model_json
-from .myregistry import Registry
-from .mysnowflake import _execute_query_with_conn
-from .myquery import build_select_from_search
-from .myauth import require_roles
-from .myrequire import require_auth, require_roles_access
-from .myroutes import router as auth_public
-from .mytsx import (
+from .filters import parse_search_model_json
+from .registry import Registry
+from .database import _execute_query_with_conn
+from .query import build_select_from_search
+from .auth import require_roles
+from .auth.require import require_auth, require_roles_access
+from .routes import router as auth_public
+from .tsx import (
     _to_camel,
     _as_name,
     _to_pascal,
     _infer_ts_type_for_column
 )
-from .myvalidations import (
+from .validation import (
     _assert_columns_allowed,
     _assert_sorts_allowed,
     _assert_filters_allowed,

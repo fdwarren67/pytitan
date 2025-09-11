@@ -1,8 +1,8 @@
 
 import os
 
-from .myregistry import RegistryEntry
-from .myfilter import FilterCollection, Operator
+from ..registry import RegistryEntry
+from ..filters import FilterCollection, Operator
 
 GLOBAL_MAX_PAGE_SIZE = int(os.getenv("GLOBAL_MAX_PAGE_SIZE", "1000"))
 _TEXTY = {"TEXT"}

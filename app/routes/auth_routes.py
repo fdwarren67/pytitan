@@ -5,8 +5,8 @@ from pydantic import BaseModel
 from typing import Any, Dict
 import jwt
 
-from .myauth import verify_google_id_token 
-from .mysession import issue_tokens, verify_refresh, set_refresh_cookie, clear_refresh_cookie
+from ..auth import verify_google_id_token 
+from ..session import issue_tokens, verify_refresh, set_refresh_cookie, clear_refresh_cookie
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

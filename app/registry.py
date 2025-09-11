@@ -1,7 +1,7 @@
 
 import yaml, json, os, time, typing as t
 from pathlib import Path
-from app.mysnowflake import _describe_view_snowflake
+from .database import _describe_view_snowflake
 
 VIEWS_PATH = Path(os.getenv("VIEWS_FILE", "config/views.yaml"))
 CACHE_PATH = Path(os.getenv("COLUMNS_CACHE_FILE", "config/columns_cache.json"))
