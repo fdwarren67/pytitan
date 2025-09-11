@@ -88,10 +88,10 @@ class FilterCollection:
 # JSON Schemas (optional validation if jsonschema is installed)
 # ---------------------------------------------------------------------------
 
-FSNFILTER_SCHEMA: Dict[str, Any] = {
+FILTER_SCHEMA: Dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://example.com/fsnfilter.schema.json",
-    "title": "FsnFilter Collection",
+    "$id": "https://example.com/filter.schema.json",
+    "title": "Filter Collection",
     "$defs": {
         "FilterExpression": {
             "type": "object",
@@ -162,7 +162,7 @@ def parse_filter_collection_json(
     """
     data = json.loads(payload) if isinstance(payload, str) else payload
     if validate:
-        _validate(data, FSNFILTER_SCHEMA)
+        _validate(data, FILTER_SCHEMA)
     return FilterCollection.from_dict(data)
 
 
@@ -170,16 +170,16 @@ def parse_filter_collection_json(
 # Search model with camelCase interop (includes entityName)
 # ---------------------------------------------------------------------------
 
-FSNSEARCH_SCHEMA: Dict[str, Any] = {
+SEARCH_SCHEMA: Dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://example.com/fsnsearch.schema.json",
-    "title": "FsnFilter SearchModel",
+    "$id": "https://example.com/search.schema.json",
+    "title": "Filter SearchModel",
     "type": "object",
     "additionalProperties": False,
     "properties": {
         "entityName": {"type": "string", "minLength": 1},
         "columns": {"type": "array", "items": {"type": "string"}},
-        "filter": {"$ref": "fsnfilter.schema.json#/$defs/FilterCollection"},
+        "filter": {"$ref": "filter.schema.json#/$defs/FilterCollection"},
         "sort": {"type": "array", "items": {"type": "string"}},
         "pageSize": {"type": "integer", "minimum": 0},
         "pageIndex": {"type": "integer", "minimum": 0},
@@ -234,8 +234,8 @@ def _validate_search(instance: Dict[str, Any]) -> None:
         return
 
     # Use the filter schema as the base for resolver; it contains $defs we need.
-    resolver = RefResolver.from_schema(FSNFILTER_SCHEMA)
-    jsonschema.validate(instance=instance, schema=FSNSEARCH_SCHEMA, resolver=resolver)
+    resolver = RefResolver.from_schema(FILTER_SCHEMA)
+    jsonschema.validate(instance=instance, schema=SEARCH_SCHEMA, resolver=resolver)
 
 
 def parse_search_model_json(
@@ -250,7 +250,7 @@ def parse_search_model_json(
     data = json.loads(payload) if isinstance(payload, str) else payload
     if validate:
         _validate_search(data)
-        _validate(data.get("filter", {}), FSNFILTER_SCHEMA)
+        _validate(data.get("filter", {}), FILTER_SCHEMA)
     return SearchModel.from_dict(data)
 
 
@@ -263,9 +263,9 @@ __all__ = [
     "LogicalOperator",
     "FilterExpression",
     "FilterCollection",
-    "FSNFILTER_SCHEMA",
+    "FILTER_SCHEMA",
     "parse_filter_collection_json",
     "SearchModel",
-    "FSNSEARCH_SCHEMA",
+    "SEARCH_SCHEMA",
     "parse_search_model_json",
 ]

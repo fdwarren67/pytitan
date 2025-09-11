@@ -1,10 +1,36 @@
 # views.yaml
 entities:
   County:
-    view: PLAYGROUND.STYX.CM_COUNTY
+    view: PLAYGROUND.STYX.CM_COUNTY_VW
 
   State:
-    view: PLAYGROUND.STYX.CM_STATE
+    view: PLAYGROUND.STYX.CM_STATE_VW
 
   StatePlane:
-    view: PLAYGROUND.STYX.CM_STATE_PLANE
+    view: PLAYGROUND.STYX.CM_STATE_PLANE_VW
+
+  Block:
+    view: PLAYGROUND.STYX.PW_BLOCK_VW
+    
+  BlockFormation:
+    view: PLAYGROUND.STYX.PW_BLOCK_FORMATION_VW
+
+  BusinessUnit:
+    view: PLAYGROUND.STYX.PW_BUSINESS_UNIT_VW
+
+  DevelopmentArea:
+    view: PLAYGROUND.STYX.PW_DEVELOPMENT_AREA_VW
+
+  DevelopmentAreaFormation:
+    view: PLAYGROUND.STYX.PW_DEVELOPMENT_AREA_FORMATION_VW
+
+  Formation:
+    view: PLAYGROUND.STYX.PW_FORMATION_VW
+
+  Lateral:
+    view: PLAYGROUND.STYX.PW_LATERAL_VW
+
+  RegulatoryField:
+    view: PLAYGROUND.STYX.PW_REGULATORY_FIELD_VW
+
+  
