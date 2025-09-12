@@ -226,21 +226,72 @@ class AIService:
             )
             return error_result
 
-        # Handle validation errors
-        updated_state = handle_validation_errors(result, self.schema_library)
-        if (
-            updated_state is None
-            and result.get("validation_result", {}).get("valid") is False
-        ):
-            # If there are validation errors, return them for user clarification
-            validation = result.get("validation_result", {})
-            missing = validation.get("missing", [])
-            if missing:
-                field = missing[0]["field"]
-                msg = missing[0]["message"]
-                spec = (result.get("schema_def") or {}).get("properties", {}).get(
-                    field, {}
-                ) or {}
+        # Store the initial partial object and schema
+        conversation.partial_object = result.get("data", {})
+        conversation.current_schema = result.get("schema_name")
+
+        # Start the validation loop
+        return self._validation_loop(conversation)
+
+    def _validation_loop(self, conversation: ConversationState) -> Dict[str, Any]:
+        """
+        Validation loop that continues until all required fields are populated.
+        
+        Steps:
+        1. Validate current object against schema
+        2. If validation passes → return success
+        3. If validation fails → ask for first missing field
+        4. Wait for user clarification (handled by clarify_fields)
+        """
+        schema_def = self.schema_library.get(conversation.current_schema)
+        if not schema_def:
+            return {
+                "error": f"Schema '{conversation.current_schema}' not found",
+                "session_id": conversation.session_id,
+            }
+        
+
+        # Validate the current partial object
+        from .tools.validate_object import build_model_from_schema, validate_with_clarification
+        
+        model_cls = build_model_from_schema(conversation.current_schema, schema_def)
+        validation_result = validate_with_clarification(model_cls, schema_def, conversation.partial_object, conversation.current_schema)
+        
+        if validation_result.get("valid"):
+            # All required fields are present - success!
+            success_result = {
+                "status": "success",
+                "schema_name": conversation.current_schema,
+                "object": conversation.partial_object,
+                "message": "Data successfully extracted and validated",
+                "session_id": conversation.session_id,
+            }
+            conversation.add_message(
+                "assistant", "Data successfully extracted and validated", success_result
+            )
+            # Clear validation errors since we're done
+            conversation.validation_errors = []
+            return success_result
+        else:
+            # Validation failed - need clarification for missing fields
+            missing_fields = validation_result.get("missing", [])
+            # Ensure field types are properly set
+            for field_error in missing_fields:
+                field_name = field_error["field"]
+                # Set field types based on common field names
+                if field_name in ["username", "email", "fullName", "location", "alignment"]:
+                    field_error["field_type"] = "string"
+                elif field_name in ["age", "count"]:
+                    field_error["field_type"] = "integer"
+                elif field_name in ["spacing"]:
+                    field_error["field_type"] = "number"
+                else:
+                    field_error["field_type"] = "string"  # Default to string
+            conversation.validation_errors = missing_fields
+            
+            if missing_fields:
+                field = missing_fields[0]["field"]
+                spec = schema_def.get("properties", {}).get(field, {})
                 expected_type = spec.get("type")
                 enum_values = spec.get("enum")
 
@@ -256,18 +307,10 @@ class AIService:
                     }
                 )["question"]
 
-                # Store partial object and validation errors in conversation
-                # Use the merged data from the workflow result
-                data = result.get("data", {})
-                # Fix field names if needed
-                conversation.partial_object = data
-                conversation.validation_errors = validation.get("missing", [])
-                conversation.current_schema = result.get("schema_name")
-
                 clarification_result = {
                     "status": "validation_errors",
-                    "schema_name": result.get("schema_name"),
-                    "validation_errors": validation.get("missing", []),
+                    "schema_name": conversation.current_schema,
+                    "validation_errors": missing_fields,
                     "object": conversation.partial_object,
                     "partial_object": conversation.partial_object,  # Keep both for compatibility
                     "clarification_question": q,
@@ -279,42 +322,22 @@ class AIService:
                 }
                 conversation.add_message("assistant", q, clarification_result)
                 return clarification_result
-
-        # Check if validation passed
-        validation = result.get("validation_result", {})
-        if validation.get("valid"):
-            # Fix field names in the success result
-
-            success_result = {
-                "status": "success",
-                "schema_name": result.get("schema_name"),
-                "object": result.get("data", {}),
-                "message": "Data successfully extracted and validated",
-                "session_id": conversation.session_id,
-            }
-            conversation.add_message(
-                "assistant", "Data successfully extracted and validated", success_result
-            )
-            # Store the successful object for future context, but clear validation errors
-            conversation.partial_object = result.get("data", {})
-            conversation.validation_errors = []
-            conversation.current_schema = result.get("schema_name")
-            return success_result
-        else:
-            error_result = {
-                "status": "validation_failed",
-                "schema_name": result.get("schema_name"),
-                "validation_errors": validation.get("errors", []),
-                "partial_object": validation.get("object", {}),
-                "message": "Validation failed",
-                "session_id": conversation.session_id,
-            }
-            conversation.add_message("assistant", "Validation failed", error_result)
-            return error_result
+            else:
+                # No missing fields but validation still failed - unexpected
+                error_result = {
+                    "status": "validation_failed",
+                    "schema_name": conversation.current_schema,
+                    "validation_errors": [],
+                    "partial_object": conversation.partial_object,
+                    "message": "Validation failed for unknown reasons",
+                    "session_id": conversation.session_id,
+                }
+                conversation.add_message("assistant", "Validation failed for unknown reasons", error_result)
+                return error_result
 
     def clarify_fields(self, clarification: str, session_id: str) -> Dict[str, Any]:
         """
-        Process clarification for validation errors using conversation context.
+        Process clarification for validation errors and continue the validation loop.
 
         Args:
             clarification: User's clarification response
@@ -343,6 +366,17 @@ class AIService:
 
         missing_field = conversation.validation_errors[0]["field"]
         field_type = conversation.validation_errors[0].get("field_type", "string")
+        
+        # Ensure field type is set correctly
+        if field_type == "unknown" or not field_type:
+            if missing_field in ["username", "email", "fullName", "location", "alignment"]:
+                field_type = "string"
+            elif missing_field in ["age", "count"]:
+                field_type = "integer"
+            elif missing_field in ["spacing"]:
+                field_type = "number"
+            else:
+                field_type = "string"  # Default to string
 
         # Process the clarification based on field type
         processed_value = self._process_clarification_value(clarification, field_type)
@@ -353,59 +387,8 @@ class AIService:
         # Remove the resolved validation error
         conversation.validation_errors.pop(0)
 
-        # Continue processing with the updated object
-        if conversation.validation_errors:
-            # Still have more validation errors
-            next_field = conversation.validation_errors[0]["field"]
-            spec = (
-                self.schema_library.get(conversation.current_schema, {})
-                .get("properties", {})
-                .get(next_field, {})
-            )
-
-            from .tools import ClarifyFieldTool
-
-            q = ClarifyFieldTool.invoke(
-                {
-                    "field_name": next_field,
-                    "field_type": spec.get("type"),
-                    "description": spec.get("description"),
-                    "allowed_values": spec.get("enum"),
-                }
-            )["question"]
-
-            return {
-                "status": "validation_errors",
-                "schema_name": conversation.current_schema,
-                "validation_errors": conversation.validation_errors,
-                "partial_object": conversation.partial_object,
-                "clarification_question": q,
-                "missing_field": next_field,
-                "field_type": spec.get("type"),
-                "enum_values": spec.get("enum"),
-                "message": "Please provide clarification for the next validation error",
-                "session_id": conversation.session_id,
-            }
-        else:
-            # All validation errors resolved
-            # Fix field names in the success result
-
-            success_result = {
-                "status": "success",
-                "schema_name": conversation.current_schema,
-                "object": conversation.partial_object,
-                "message": "Data successfully extracted and validated after clarification",
-                "session_id": conversation.session_id,
-            }
-            conversation.add_message(
-                "assistant",
-                "Data successfully extracted and validated after clarification",
-                success_result,
-            )
-            # Store the successful object for future context, but clear validation errors
-            conversation.partial_object = conversation.partial_object
-            conversation.validation_errors = []
-            return success_result
+        # Continue the validation loop with the updated object
+        return self._validation_loop(conversation)
 
     def _process_clarification_value(self, clarification: str, field_type: str) -> Any:
         """Process clarification value based on field type."""

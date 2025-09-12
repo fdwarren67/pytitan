@@ -36,7 +36,8 @@ class WorkflowRunner:
                 # Always go to validate_object after hydration
                 current_node = "validate_object"
             elif current_node == "validate_object":
-                # End after validation
+                # Always end workflow after validation
+                # Let the service handle the validation loop and clarification
                 current_node = None
 
         return state.model_dump()

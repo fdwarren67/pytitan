@@ -26,41 +26,44 @@ def build_model_from_schema(name: str, schema: Dict[str, Any]) -> type[BaseModel
     return create_model(name, **fields)  # type: ignore
 
 
-def validate_with_clarification(model_cls, schema: dict, data: dict) -> dict:
-    try:
-        obj = model_cls(**(data or {}))
-        # ⬇️ drop nulls so optional fields don’t appear as null
-        cleaned = obj.model_dump(exclude_none=True)
-
-        validator = Draft7Validator(schema)
-        errors = sorted(validator.iter_errors(cleaned), key=lambda e: e.path)
-        if errors:
-            e = errors[0]  # return one missing field at a time
-            # pull a field name if it’s a required-missing error; else use path
-            msg = e.message
-            field = (
-                "'{}'".format(msg.split("'")[1])
-                if "is a required property" in msg
-                else ".".join(map(str, e.path)) or "?"
-            )
-            return {
-                "valid": False,
-                "missing": [{"field": field.strip("'"), "message": msg}],
-            }
-
-        return {"valid": True, "object": cleaned}
-
-    except ValidationError as pe:
-        e0 = (pe.errors() or [{}])[0]
+def validate_with_clarification(model_cls, schema: dict, data: dict, schema_name: str = None) -> dict:
+    """
+    Validate data against JSON schema, properly handling conditional requirements.
+    """
+    cleaned = data or {}
+    
+    
+    # Default validation for other schemas
+    from jsonschema import Draft7Validator
+    validator = Draft7Validator(schema)
+    errors = list(validator.iter_errors(cleaned))
+    
+    if errors:
+        missing_fields = []
+        schema_properties = schema.get("properties", {})
+        
+        for error in errors:
+            # Extract field name from error message
+            if "is a required property" in error.message:
+                field_name = error.message.split("'")[1]
+            else:
+                field_name = ".".join(map(str, error.path)) if error.path else "unknown"
+            
+            field_spec = schema_properties.get(field_name, {})
+            field_type = field_spec.get("type", "string")
+            
+            missing_fields.append({
+                "field": field_name,
+                "message": error.message,
+                "field_type": field_type
+            })
+        
         return {
             "valid": False,
-            "missing": [
-                {
-                    "field": ".".join(map(str, e0.get("loc", []))) or "?",
-                    "message": e0.get("msg", "invalid value"),
-                }
-            ],
+            "missing": missing_fields,
         }
+    
+    return {"valid": True, "object": cleaned}
 
 
 class ValidatorInput(BaseModel):

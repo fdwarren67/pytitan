@@ -3,6 +3,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Disable LangSmith tracing to avoid rate limit errors
+import os
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
+
 import os, re, datetime as dt
 
 from copy import deepcopy
