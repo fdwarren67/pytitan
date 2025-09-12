@@ -12,6 +12,6 @@ from .builder import (
 
 __all__ = [
     "build_where_clause_and_params",
-    "build_select_from_search", 
+    "build_select_from_search",
     "SelectBuildResult",
 ]

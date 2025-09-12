@@ -18,7 +18,7 @@ from .models import (
 
 __all__ = [
     "Operator",
-    "LogicalOperator", 
+    "LogicalOperator",
     "FilterExpression",
     "FilterCollection",
     "SearchModel",

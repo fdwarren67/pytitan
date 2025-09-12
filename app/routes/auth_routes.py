@@ -5,20 +5,28 @@ from pydantic import BaseModel
 from typing import Any, Dict
 import jwt
 
-from ..auth import verify_google_id_token 
-from ..session import issue_tokens, verify_refresh, set_refresh_cookie, clear_refresh_cookie
+from ..auth import verify_google_id_token
+from ..session import (
+    issue_tokens,
+    verify_refresh,
+    set_refresh_cookie,
+    clear_refresh_cookie,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
 
 class ExchangeIn(BaseModel):
     id_token: str
 
+
 def map_roles(email: str | None) -> list[str]:
     # e = (email or "").lower()
     # if e in {"fdwarren@gmail.com"}: return ["admin"]
-    # if e.endswith("@acme.com"): return ["analyst"]  
+    # if e.endswith("@acme.com"): return ["analyst"]
 
     return ["read:data"]
+
 
 @router.post("/exchange")
 def exchange(body: ExchangeIn, response: Response):
@@ -29,7 +37,12 @@ def exchange(body: ExchangeIn, response: Response):
         {"sub": claims["sub"], "email": claims.get("email")}, roles
     )
     set_refresh_cookie(response, refresh, refresh_exp)
-    return {"token_type": "Bearer", "access_token": access, "expires_in": access_exp - int(time.time())}
+    return {
+        "token_type": "Bearer",
+        "access_token": access,
+        "expires_in": access_exp - int(time.time()),
+    }
+
 
 @router.post("/refresh")
 def refresh(request: Request, response: Response):
@@ -43,7 +56,12 @@ def refresh(request: Request, response: Response):
 
     access, access_exp, refresh_new, refresh_exp = issue_tokens(user, roles)
     set_refresh_cookie(response, refresh_new, refresh_exp)
-    return {"token_type": "Bearer", "access_token": access, "expires_in": access_exp - int(time.time())}
+    return {
+        "token_type": "Bearer",
+        "access_token": access,
+        "expires_in": access_exp - int(time.time()),
+    }
+
 
 @router.post("/logout")
 def logout(response: Response):

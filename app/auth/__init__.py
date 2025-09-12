@@ -12,6 +12,6 @@ from .oauth import (
 
 __all__ = [
     "verify_google_id_token",
-    "_roles_for", 
+    "_roles_for",
     "require_roles",
 ]

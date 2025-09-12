@@ -9,6 +9,7 @@ import json
 # Enums
 # ---------------------------------------------------------------------------
 
+
 class Operator(str, Enum):
     EQ = "EQ"
     NE = "NE"
@@ -32,11 +33,13 @@ class LogicalOperator(str, Enum):
 # Core filter models
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FilterExpression:
     """
     Basic component of a filter: a property (column), an operator, and a value.
     """
+
     property_name: str
     operator: Operator = Operator.EQ
     value: Any = ""
@@ -63,6 +66,7 @@ class FilterCollection:
     """
     Ragged hierarchy of FilterExpressions for complex comparisons.
     """
+
     logical_operator: LogicalOperator = LogicalOperator.AND
     collections: List["FilterCollection"] = field(default_factory=list)
     expressions: List["FilterExpression"] = field(default_factory=list)
@@ -78,9 +82,13 @@ class FilterCollection:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "FilterCollection":
         return cls(
-            logical_operator=LogicalOperator(data.get("logicalOperator", LogicalOperator.AND.value)),
+            logical_operator=LogicalOperator(
+                data.get("logicalOperator", LogicalOperator.AND.value)
+            ),
             collections=[cls.from_dict(c) for c in data.get("collections", [])],
-            expressions=[FilterExpression.from_dict(e) for e in data.get("expressions", [])],
+            expressions=[
+                FilterExpression.from_dict(e) for e in data.get("expressions", [])
+            ],
         )
 
 
@@ -100,7 +108,19 @@ FILTER_SCHEMA: Dict[str, Any] = {
                 "propertyName": {"type": "string", "minLength": 1},
                 "operator": {
                     "type": "string",
-                    "enum": ["EQ","NE","LK","SW","EW","GT","GTE","LT","LTE","IN","NIN"],
+                    "enum": [
+                        "EQ",
+                        "NE",
+                        "LK",
+                        "SW",
+                        "EW",
+                        "GT",
+                        "GTE",
+                        "LT",
+                        "LTE",
+                        "IN",
+                        "NIN",
+                    ],
                 },
                 "value": {},
             },
@@ -108,7 +128,7 @@ FILTER_SCHEMA: Dict[str, Any] = {
             "allOf": [
                 # For IN/NIN, value must be an array
                 {
-                    "if": {"properties": {"operator": {"enum": ["IN","NIN"]}}},
+                    "if": {"properties": {"operator": {"enum": ["IN", "NIN"]}}},
                     "then": {"properties": {"value": {"type": "array"}}},
                 },
                 # Otherwise, allow string or array of strings
@@ -120,7 +140,7 @@ FILTER_SCHEMA: Dict[str, Any] = {
                                 {"type": "string"},
                                 {"type": "number"},
                                 {"type": "boolean"},
-                                {"type": "null"}
+                                {"type": "null"},
                             ]
                         }
                     }
@@ -131,15 +151,22 @@ FILTER_SCHEMA: Dict[str, Any] = {
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                "logicalOperator": {"type": "string", "enum": ["And","Or"]},
-                "collections": {"type": "array", "items": {"$ref": "#/$defs/FilterCollection"}},
-                "expressions": {"type": "array", "items": {"$ref": "#/$defs/FilterExpression"}},
+                "logicalOperator": {"type": "string", "enum": ["And", "Or"]},
+                "collections": {
+                    "type": "array",
+                    "items": {"$ref": "#/$defs/FilterCollection"},
+                },
+                "expressions": {
+                    "type": "array",
+                    "items": {"$ref": "#/$defs/FilterExpression"},
+                },
             },
         },
     },
     "type": "object",
     "$ref": "#/$defs/FilterCollection",
 }
+
 
 def _validate(instance: Dict[str, Any], schema: Dict[str, Any]) -> None:
     """
@@ -187,11 +214,13 @@ SEARCH_SCHEMA: Dict[str, Any] = {
     "required": ["entityName", "filter"],
 }
 
+
 @dataclass
 class SearchModel:
     """
     Python-idiomatic model (snake_case) with camelCase JSON interop.
     """
+
     entity_name: str = ""
     columns: List[str] = field(default_factory=list)
     filter: FilterCollection = field(default_factory=FilterCollection)

@@ -1,0 +1,38 @@
+{
+  "$id": "https://example.com/wine-rack-layer-template.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A wine rack layer describing wellbore spacing and alignment",
+  "type": "object",
+  "properties": {
+    "alignment": {
+      "type": "string",
+      "description": "Well alignment strategy",
+      "enum": ["left", "right", "center", "justify"]
+    },
+    "spacing": {
+      "type": "number",
+      "description": "Spacing between wells in feet"
+    },
+    "count": {
+      "type": "integer",
+      "description": "Number of wells in the layer"
+    }
+  },
+  "required": ["alignment"],
+  "allOf": [
+    {
+      "if": {
+        "required": ["alignment"],
+        "properties": { "alignment": { "enum": ["left", "right", "center"] } }
+      },
+      "then": { "required": ["spacing"] }
+    },
+    {
+      "if": {
+        "required": ["alignment"],
+        "properties": { "alignment": { "enum": ["justify"] } }
+      },
+      "then": { "required": ["count"] }
+    }
+  ]
+}

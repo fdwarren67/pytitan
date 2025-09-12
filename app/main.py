@@ -20,24 +20,21 @@ from .query import build_select_from_search
 from .auth import require_roles
 from .auth.require import require_auth, require_roles_access
 from .routes import router as auth_public
-from .tsx import (
-    _to_camel,
-    _as_name,
-    _to_pascal,
-    _infer_ts_type_for_column
-)
+from .ai import router as ai_router
+from .tsx import _to_camel, _as_name, _to_pascal, _infer_ts_type_for_column
 from .validation import (
     _assert_columns_allowed,
     _assert_sorts_allowed,
     _assert_filters_allowed,
-    _cap_page_size
+    _cap_page_size,
 )
 
 GLOBAL_MAX_PAGE_SIZE = int(os.getenv("GLOBAL_MAX_PAGE_SIZE", "1000"))
 
-app = FastAPI(title="Data Service", version="1.4.0")
+app = FastAPI(title="Pytitan Data Service with AI", version="2.0.0")
 
 app.include_router(auth_public)
+app.include_router(ai_router)
 
 origins_raw = os.getenv("CORS_ALLOW_ORIGINS", "")
 origins = [o.strip() for o in origins_raw.split(",") if o.strip()]
@@ -47,19 +44,40 @@ app.add_middleware(
     allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
-    allow_credentials=True,  
+    allow_credentials=True,
 )
 
 REG = Registry()
+
 
 @app.on_event("startup")
 def _startup():
     REG.load_views()
     REG.load_cache()
 
+
 @app.get("/healthz")
 def health():
-    return {"ok": True, "entities": list(REG.entities_cfg.keys())}
+    try:
+        from .ai import AIService
+
+        ai_service = AIService()
+        ai_schemas = ai_service.get_available_schemas()
+        return {
+            "ok": True,
+            "entities": list(REG.entities_cfg.keys()),
+            "ai_schemas": ai_schemas,
+            "services": ["data", "ai"],
+        }
+    except Exception as e:
+        return {
+            "ok": True,
+            "entities": list(REG.entities_cfg.keys()),
+            "ai_schemas": [],
+            "services": ["data"],
+            "ai_error": str(e),
+        }
+
 
 @app.post("/sql", dependencies=[Depends(require_roles_access(["read:data"]))])
 def build_query(
@@ -104,6 +122,7 @@ def build_query(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.post("/search", dependencies=[Depends(require_roles_access(["read:data"]))])
 def search(
     payload: dict = Body(..., description="SearchModel in camelCase JSON"),
@@ -111,7 +130,7 @@ def search(
     use_ilike: bool = False,
     quote_identifiers: bool = False,
     distinct: bool = False,
-    claims: dict = Depends(require_auth)
+    claims: dict = Depends(require_auth),
 ):
     try:
         sm = parse_search_model_json(payload, validate=True)
@@ -121,7 +140,8 @@ def search(
         _assert_filters_allowed(sm.entity_name, sm.filter, entry)
         sm.page_size = _cap_page_size(sm.entity_name, sm.page_size, entry)
 
-        sm_for_sql = deepcopy(sm); sm_for_sql.entity_name = entry["view"]
+        sm_for_sql = deepcopy(sm)
+        sm_for_sql.entity_name = entry["view"]
 
         build = build_select_from_search(
             sm_for_sql,
@@ -134,7 +154,9 @@ def search(
 
         role = os.getenv("SNOWFLAKE_DEFAULT_ROLE")
 
-        cols, rows = _execute_query_with_conn(entry["view"], build.sql, build.params, role=role)
+        cols, rows = _execute_query_with_conn(
+            entry["view"], build.sql, build.params, role=role
+        )
 
         return {
             "columns": cols,
@@ -171,13 +193,17 @@ def list_entities(
             try:
                 cached = REG.ensure_entity(name)
             except Exception as e:
-                out.append({
-                    "entity": name,
-                    "view": meta["view"],
-                    "maxPageSize": int(meta.get("maxPageSize", GLOBAL_MAX_PAGE_SIZE)),
-                    "cached": False,
-                    "error": str(e),
-                })
+                out.append(
+                    {
+                        "entity": name,
+                        "view": meta["view"],
+                        "maxPageSize": int(
+                            meta.get("maxPageSize", GLOBAL_MAX_PAGE_SIZE)
+                        ),
+                        "cached": False,
+                        "error": str(e),
+                    }
+                )
                 continue
 
         item = {
@@ -190,12 +216,14 @@ def list_entities(
             item["loadedAt"] = cached.get("loadedAt")
             if include_columns:
                 item["columns"] = [
-                    {"name": col, "type": typ} for col, typ in cached.get("columns", {}).items()
+                    {"name": col, "type": typ}
+                    for col, typ in cached.get("columns", {}).items()
                 ]
 
         out.append(item)
 
     return {"entities": out}
+
 
 @app.post("/reload", dependencies=[Depends(require_roles(["admin"]))])
 def reload_registry():
@@ -205,9 +233,15 @@ def reload_registry():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/me")
-def me(claims = Depends(require_auth)):
-    return {"sub": claims["sub"], "email": claims.get("email"), "roles": claims.get("roles", [])}
+def me(claims=Depends(require_auth)):
+    return {
+        "sub": claims["sub"],
+        "email": claims.get("email"),
+        "roles": claims.get("roles", []),
+    }
+
 
 @app.post("/tsx", dependencies=[Depends(require_roles_access(["read:data"]))])
 def search_typescript(
@@ -250,7 +284,9 @@ def search_typescript(
 
         class_name = f"{_to_pascal(mapped_view)}"
 
-        props_src = "\n".join([f"  {keys[i]}: {ts_types[i]} | undefined;" for i in range(len(keys))])
+        props_src = "\n".join(
+            [f"  {keys[i]}: {ts_types[i]} | undefined;" for i in range(len(keys))]
+        )
 
         ts = f"""// Auto-generated from /search on {dt.datetime.utcnow().isoformat()}Z
 // View: {mapped_view}

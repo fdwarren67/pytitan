@@ -1,5 +1,6 @@
 import os, typing as t
 
+
 def _load_p8_as_der_bytes(path: str) -> bytes:
     from cryptography.hazmat.primitives import serialization
 
@@ -17,6 +18,7 @@ def _load_p8_as_der_bytes(path: str) -> bytes:
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     )
+
 
 def _describe_view_snowflake(db_path: str) -> dict[str, str]:
     """
@@ -39,21 +41,28 @@ def _describe_view_snowflake(db_path: str) -> dict[str, str]:
 
         def bucket(dtype: str) -> str:
             u = dtype.upper()
-            if any(x in u for x in ("CHAR", "TEXT", "STRING", "BINARY")): return "TEXT"
-            if any(x in u for x in ("NUMBER", "DECIMAL", "INT", "FLOAT", "DOUBLE")): return "NUMBER"
-            if "BOOLEAN" in u: return "BOOLEAN"
-            if "TIMESTAMP" in u: return "TIMESTAMP"
-            if u == "DATE": return "DATE"
-            if u == "TIME": return "TIME"
+            if any(x in u for x in ("CHAR", "TEXT", "STRING", "BINARY")):
+                return "TEXT"
+            if any(x in u for x in ("NUMBER", "DECIMAL", "INT", "FLOAT", "DOUBLE")):
+                return "NUMBER"
+            if "BOOLEAN" in u:
+                return "BOOLEAN"
+            if "TIMESTAMP" in u:
+                return "TIMESTAMP"
+            if u == "DATE":
+                return "DATE"
+            if u == "TIME":
+                return "TIME"
             return "OTHER"
 
         return {name: bucket(dtype) for (name, dtype) in rows}
     finally:
         conn.close()
 
-def _sf_connect_for(db: str, schema: str, *,
-                    oauth_token: str | None = None,
-                    role: str | None = None):
+
+def _sf_connect_for(
+    db: str, schema: str, *, oauth_token: str | None = None, role: str | None = None
+):
     import snowflake.connector
 
     common = dict(
@@ -70,12 +79,11 @@ def _sf_connect_for(db: str, schema: str, *,
     pk_path = os.environ["SNOWFLAKE_PRIVATE_KEY_PATH"]
     pkb = _load_p8_as_der_bytes(pk_path)
     conn = snowflake.connector.connect(
-        user=os.environ["SNOWFLAKE_USER"],
-        private_key=pkb,
-        **common
+        user=os.environ["SNOWFLAKE_USER"], private_key=pkb, **common
     )
 
     return conn
+
 
 def _split_db_path(path: str) -> tuple[str, str, str]:
     """Accept 1-, 2-, or 3-part names; fill missing parts from env."""
@@ -91,12 +99,16 @@ def _split_db_path(path: str) -> tuple[str, str, str]:
         db = os.environ.get("SNOWFLAKE_DATABASE")
         schema = os.environ.get("SNOWFLAKE_SCHEMA")
         if not db or not schema:
-            raise RuntimeError("VIEW given but SNOWFLAKE_DATABASE or SNOWFLAKE_SCHEMA missing.")
+            raise RuntimeError(
+                "VIEW given but SNOWFLAKE_DATABASE or SNOWFLAKE_SCHEMA missing."
+            )
         return db, schema, parts[0]
     raise RuntimeError(f"Invalid object name: {path!r}")
 
 
-def _execute_query_with_conn(db_path: str, sql: str, params, *, role: str | None = None):
+def _execute_query_with_conn(
+    db_path: str, sql: str, params, *, role: str | None = None
+):
     db, schema, _ = _split_db_path(db_path)
     conn = _sf_connect_for(db, schema, oauth_token=None, role=role)
     try:

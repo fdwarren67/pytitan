@@ -16,6 +16,6 @@ __all__ = [
     "issue_tokens",
     "verify_access",
     "verify_refresh",
-    "set_refresh_cookie", 
+    "set_refresh_cookie",
     "clear_refresh_cookie",
 ]

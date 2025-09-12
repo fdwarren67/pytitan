@@ -1,4 +1,3 @@
-
 import yaml, json, os, time, typing as t
 from pathlib import Path
 from .database import _describe_view_snowflake
@@ -7,15 +6,18 @@ VIEWS_PATH = Path(os.getenv("VIEWS_FILE", "config/views.yaml"))
 CACHE_PATH = Path(os.getenv("COLUMNS_CACHE_FILE", "config/columns_cache.json"))
 GLOBAL_MAX_PAGE_SIZE = int(os.getenv("GLOBAL_MAX_PAGE_SIZE", "1000"))
 
+
 class EntityMeta(t.TypedDict, total=False):
     view: str
     maxPageSize: int
+
 
 class RegistryEntry(t.TypedDict):
     view: str
     columns: dict[str, str]  # NAME -> TYPE_CATEGORY
     loadedAt: str
     maxPageSize: int
+
 
 class Registry:
     def __init__(self):
@@ -28,7 +30,9 @@ class Registry:
         with VIEWS_PATH.open("r", encoding="utf-8") as f:
             if VIEWS_PATH.suffix.lower() in (".yaml", ".yml"):
                 if not yaml:
-                    raise RuntimeError("PyYAML not installed but a YAML views file was provided.")
+                    raise RuntimeError(
+                        "PyYAML not installed but a YAML views file was provided."
+                    )
                 cfg = yaml.safe_load(f)
             else:
                 cfg = json.load(f)
@@ -92,4 +96,3 @@ class Registry:
                 summaries[name] = f"error: {e}"
         self.save_cache()
         return summaries
-    

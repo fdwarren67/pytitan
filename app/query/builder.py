@@ -13,6 +13,7 @@ from ..filters import (
 
 _UNQUOTED_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
 
+
 def _quote_identifier(name: str, *, quote_identifiers: bool) -> str:
     """
     Quote an identifier if needed. Doubles internal quotes.
@@ -21,12 +22,16 @@ def _quote_identifier(name: str, *, quote_identifiers: bool) -> str:
         return name
     return f"\"{name.replace('\"', '\"\"')}\""
 
+
 def _quote_dotted_identifier(name: str, *, quote_identifiers: bool) -> str:
     """
     Quote a possibly dotted identifier (e.g., db.schema.table).
     """
     parts = [p.strip() for p in name.split(".")]
-    return ".".join(_quote_identifier(p, quote_identifiers=quote_identifiers) for p in parts)
+    return ".".join(
+        _quote_identifier(p, quote_identifiers=quote_identifiers) for p in parts
+    )
+
 
 def _escape_like(value: str) -> str:
     """
@@ -36,13 +41,17 @@ def _escape_like(value: str) -> str:
     value = value.replace("%", "\\%").replace("_", "\\_")
     return value
 
+
 class _ParamSink:
     """
     Collects params and returns the correct placeholder per paramstyle.
       - 'qmark'    -> ?, params is a list
       - 'pyformat' -> %(p1)s, params is a dict
     """
-    def __init__(self, paramstyle: str = "qmark", *, prefix: str = "p", start_index: int = 1):
+
+    def __init__(
+        self, paramstyle: str = "qmark", *, prefix: str = "p", start_index: int = 1
+    ):
         if paramstyle not in {"qmark", "pyformat"}:
             raise ValueError("paramstyle must be 'qmark' or 'pyformat'")
         self.paramstyle = paramstyle
@@ -64,6 +73,7 @@ class _ParamSink:
     def bundle(self) -> Union[List[Any], Dict[str, Any]]:
         return self.params_list if self.paramstyle == "qmark" else self.params_dict
 
+
 def _format_like_pattern(val: str, op: Operator) -> str:
     lit = _escape_like(str(val))
     if op.value == "LK":
@@ -73,6 +83,7 @@ def _format_like_pattern(val: str, op: Operator) -> str:
     if op.value == "EW":
         return f"%{lit}"
     raise AssertionError("LIKE pattern requested for non-like operator")
+
 
 def _normalize_in_values(raw: Union[str, Sequence[Any]]) -> List[Any]:
     """
@@ -84,6 +95,7 @@ def _normalize_in_values(raw: Union[str, Sequence[Any]]) -> List[Any]:
         items = list(raw)
     return [str(x) for x in items]
 
+
 def _build_expr_sql(
     e: FilterExpression,
     sink: _ParamSink,
@@ -92,7 +104,7 @@ def _build_expr_sql(
     quote_identifiers: bool,
 ) -> str:
     col = _quote_identifier(e.property_name, quote_identifiers=quote_identifiers)
-    op  = e.operator
+    op = e.operator
 
     # LIKE / ILIKE family
     if op in (Operator.LK, Operator.SW, Operator.EW):
@@ -113,14 +125,21 @@ def _build_expr_sql(
 
     # Scalar compares
     rhs = sink.add(str(e.value))
-    if op == Operator.EQ:  return f"{col} = {rhs}"
-    if op == Operator.NE:  return f"{col} <> {rhs}"
-    if op == Operator.GT:  return f"{col} > {rhs}"
-    if op == Operator.GTE: return f"{col} >= {rhs}"
-    if op == Operator.LT:  return f"{col} < {rhs}"
-    if op == Operator.LTE: return f"{col} <= {rhs}"
+    if op == Operator.EQ:
+        return f"{col} = {rhs}"
+    if op == Operator.NE:
+        return f"{col} <> {rhs}"
+    if op == Operator.GT:
+        return f"{col} > {rhs}"
+    if op == Operator.GTE:
+        return f"{col} >= {rhs}"
+    if op == Operator.LT:
+        return f"{col} < {rhs}"
+    if op == Operator.LTE:
+        return f"{col} <= {rhs}"
 
     raise ValueError(f"Unsupported operator: {op}")
+
 
 def _combine(parts: List[str], logical: LogicalOperator) -> str:
     if not parts:
@@ -130,10 +149,11 @@ def _combine(parts: List[str], logical: LogicalOperator) -> str:
     joiner = " AND " if logical == LogicalOperator.AND else " OR "
     return "(" + joiner.join(parts) + ")"
 
+
 def build_where_clause_and_params(
     root: FilterCollection,
     *,
-    paramstyle: str = "qmark",        # 'qmark' -> ?,  'pyformat' -> %(p1)s
+    paramstyle: str = "qmark",  # 'qmark' -> ?,  'pyformat' -> %(p1)s
     use_ilike: bool = False,
     quote_identifiers: bool = False,
     default_when_empty: str = "1=1",
@@ -145,12 +165,18 @@ def build_where_clause_and_params(
     Returns (where_sql, params). If `include_where_keyword` is True,
     where_sql will be 'WHERE ...'; otherwise it's just the predicate text.
     """
-    sink = _ParamSink(paramstyle, prefix=param_name_prefix, start_index=param_start_index)
+    sink = _ParamSink(
+        paramstyle, prefix=param_name_prefix, start_index=param_start_index
+    )
 
     def walk(node: FilterCollection) -> str:
         parts: List[str] = []
         for e in node.expressions:
-            parts.append(_build_expr_sql(e, sink, use_ilike=use_ilike, quote_identifiers=quote_identifiers))
+            parts.append(
+                _build_expr_sql(
+                    e, sink, use_ilike=use_ilike, quote_identifiers=quote_identifiers
+                )
+            )
         for c in node.collections:
             child = walk(c)
             if child:
@@ -167,6 +193,7 @@ def build_where_clause_and_params(
 
     where_sql = f"WHERE {body}" if include_where_keyword else body
     return where_sql, sink.bundle()
+
 
 # -----------------------------------------------------------------------------
 # SELECT builder
@@ -197,6 +224,7 @@ def _normalize_columns(columns: Iterable[str], *, quote_identifiers: bool) -> st
             out.append(_quote_identifier(s, quote_identifiers=quote_identifiers))
     return ", ".join(out)
 
+
 def _parse_sort_item(item: str) -> Tuple[str, str]:
     """
     Accepts:
@@ -223,6 +251,7 @@ def _parse_sort_item(item: str) -> Tuple[str, str]:
 
     return (s, "ASC")
 
+
 def _build_order_by(sort_list: Iterable[str], *, quote_identifiers: bool) -> str:
     pairs = [p for p in (_parse_sort_item(x) for x in (sort_list or [])) if p[0]]
     if not pairs:
@@ -238,12 +267,14 @@ def _build_order_by(sort_list: Iterable[str], *, quote_identifiers: bool) -> str
         rendered.append(f"{ident} {direction}")
     return "ORDER BY " + ", ".join(rendered)
 
+
 @dataclass
 class SelectBuildResult:
     sql: str
     params: Union[List[Any], Dict[str, Any]]
     count_sql: Optional[str] = None
     count_params: Optional[Union[List[Any], Dict[str, Any]]] = None
+
 
 def build_select_from_search(
     sm: SearchModel,
@@ -267,7 +298,9 @@ def build_select_from_search(
 
     select_list = _normalize_columns(sm.columns, quote_identifiers=quote_identifiers)
     distinct_kw = "DISTINCT " if distinct else ""
-    from_name = _quote_dotted_identifier(sm.entity_name, quote_identifiers=quote_identifiers)
+    from_name = _quote_dotted_identifier(
+        sm.entity_name, quote_identifiers=quote_identifiers
+    )
 
     # WHERE (skip adding WHERE if filter is empty)
     where_body, params = build_where_clause_and_params(
@@ -315,7 +348,10 @@ def build_select_from_search(
         else:
             count_sql = f"SELECT COUNT(*) FROM {from_name}"
 
-    return SelectBuildResult(sql=sql, params=params, count_sql=count_sql, count_params=count_params)
+    return SelectBuildResult(
+        sql=sql, params=params, count_sql=count_sql, count_params=count_params
+    )
+
 
 # -----------------------------------------------------------------------------
 # Public exports

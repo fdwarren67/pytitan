@@ -11,12 +11,13 @@ log = logging.getLogger("auth")
 ACCEPTED_ISS = ("accounts.google.com", "https://accounts.google.com")
 JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")  
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 ALGS = ("RS256",)
 
 jwks_client = PyJWKClient(JWKS_URL)
 
 bearer = HTTPBearer(auto_error=False)
+
 
 def verify_google_id_token(token: str) -> dict:
     try:
@@ -53,12 +54,12 @@ def verify_google_id_token(token: str) -> dict:
         log.exception("Google ID token verification failed: %s", e)
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
+
 def _roles_for(claims: Dict[str, Any]) -> Set[str]:
     email = (claims.get("email") or "").lower()
-    by_email = {
-        "fdwarren@gmail.com": {"admin", "read:data"}
-    }
+    by_email = {"fdwarren@gmail.com": {"admin", "read:data"}}
     return by_email.get(email, set())
+
 
 def require_roles(required: List[str]):
     def _dep(claims: Dict[str, Any] = Depends(verify_google_id_token)):
@@ -66,4 +67,5 @@ def require_roles(required: List[str]):
         if not set(required).issubset(have):
             raise HTTPException(status_code=403, detail="Forbidden: missing role")
         return claims
+
     return _dep
