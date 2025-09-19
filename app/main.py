@@ -54,6 +54,59 @@ app.add_middleware(
 REG = Registry()
 
 
+def _to_snake(name: str) -> str:
+    """
+    Convert camelCase string to snake_case.
+    Example: 'developmentAreaId' -> 'development_area_id'
+    """
+    # Insert an underscore before any uppercase letter that follows a lowercase letter
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    # Insert an underscore before any uppercase letter that follows a lowercase letter or digit
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+
+def _convert_camel_to_snake(sm):
+    """
+    Convert camelCase property names in SearchModel to snake_case.
+    """
+    from .filters import FilterExpression, FilterCollection
+    
+    # Convert columns
+    converted_columns = [_to_snake(col) for col in sm.columns]
+    
+    # Convert sort fields
+    converted_sort = [_to_snake(sort_field) for sort_field in sm.sort]
+    
+    # Convert filter expressions recursively
+    def convert_filter_collection(fc: FilterCollection) -> FilterCollection:
+        converted_expressions = []
+        for expr in fc.expressions:
+            converted_expr = FilterExpression(
+                property_name=_to_snake(expr.property_name),
+                operator=expr.operator,
+                value=expr.value
+            )
+            converted_expressions.append(converted_expr)
+        
+        converted_collections = [convert_filter_collection(c) for c in fc.collections]
+        
+        return FilterCollection(
+            logical_operator=fc.logical_operator,
+            collections=converted_collections,
+            expressions=converted_expressions
+        )
+    
+    converted_filter = convert_filter_collection(sm.filter)
+    
+    # Create new SearchModel with converted names
+    converted_sm = deepcopy(sm)
+    converted_sm.columns = converted_columns
+    converted_sm.sort = converted_sort
+    converted_sm.filter = converted_filter
+    
+    return converted_sm
+
+
 @app.on_event("startup")
 def _startup():
     REG.load_views()
@@ -85,15 +138,20 @@ def health():
 
 @app.post("/sql", dependencies=[Depends(require_roles_access(["read:data"]))])
 def build_query(
-    payload: dict = Body(..., description="SearchModel in camelCase JSON"),
+    payload: dict = Body(..., description="SearchModel JSON"),
     paramstyle: str = "pyformat",
     use_ilike: bool = False,
     quote_identifiers: bool = False,
     distinct: bool = False,
     include_count: bool = False,
+    is_camel_case: bool = False,
 ):
     try:
         sm = parse_search_model_json(payload, validate=True)
+
+        # Convert camelCase property names to snake_case if requested
+        if is_camel_case:
+            sm = _convert_camel_to_snake(sm)
 
         entry = REG.ensure_entity(sm.entity_name)
         _assert_columns_allowed(sm.entity_name, sm.columns, entry)
@@ -129,15 +187,22 @@ def build_query(
 
 @app.post("/search", dependencies=[Depends(require_roles_access(["read:data"]))])
 def search(
-    payload: dict = Body(..., description="SearchModel in camelCase JSON"),
+    payload: dict = Body(..., description="SearchModel JSON"),
     paramstyle: str = "pyformat",
     use_ilike: bool = False,
     quote_identifiers: bool = False,
     distinct: bool = False,
+    is_camel_case: bool = False,
     claims: dict = Depends(require_auth),
 ):
+    print("is_camel_case", is_camel_case)
     try:
         sm = parse_search_model_json(payload, validate=True)
+
+        # Convert camelCase property names to snake_case if requested
+        if is_camel_case:
+            sm = _convert_camel_to_snake(sm)
+
         entry = REG.ensure_entity(sm.entity_name)
         _assert_columns_allowed(sm.entity_name, sm.columns, entry)
         _assert_sorts_allowed(sm.entity_name, sm.sort, entry)
@@ -174,7 +239,9 @@ def search(
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(payload)
+        raise e
+        # raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/entities", dependencies=[Depends(require_roles_access(["read:data"]))])
@@ -249,11 +316,12 @@ def me(claims=Depends(require_auth)):
 
 @app.post("/tsx", dependencies=[Depends(require_roles_access(["read:data"]))])
 def search_typescript(
-    payload: dict = Body(..., description="SearchModel in camelCase JSON"),
+    payload: dict = Body(..., description="SearchModel JSON"),
     paramstyle: str = "pyformat",
     use_ilike: bool = False,
     quote_identifiers: bool = False,
     distinct: bool = False,
+    is_camel_case: bool = False,
     claims: dict = Depends(require_auth),  # ← add this
 ):
     """
@@ -269,6 +337,7 @@ def search_typescript(
             use_ilike=use_ilike,
             quote_identifiers=quote_identifiers,
             distinct=distinct,
+            is_camel_case=is_camel_case,
             claims=claims,
         )
 
