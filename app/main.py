@@ -377,3 +377,44 @@ export class {class_name} {{
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/save", dependencies=[Depends(require_roles_access(["read:data"]))])
+def save(
+    user_id: int = Body(..., description="User ID"),
+    object_type: str = Body(..., description="Object type"),
+    object_key: str = Body(..., description="Object key"),
+    payload: str = Body(..., description="Payload as JSON string"),
+    claims: dict = Depends(require_auth),
+):
+    """
+    Save data by calling the SC_FIRE_EVENT stored procedure in Snowflake.
+    """
+    try:
+        print(claims)
+        # Prepare the stored procedure call
+        sql = "CALL SC_FIRE_EVENT(%(user_id)s, %(object_type)s, %(object_key)s, %(payload)s)"
+        params = {
+            "user_id": user_id,
+            "object_type": object_type,
+            "object_key": object_key,
+            "payload": payload
+        }
+        
+        role = os.getenv("SNOWFLAKE_DEFAULT_ROLE")
+        
+        # Execute the stored procedure
+        cols, rows = _execute_query_with_conn(
+            "SC_FIRE_EVENT", sql, params, role=role
+        )
+        
+        return {
+            "success": True,
+            "user_id": user_id,
+            "object_type": object_type,
+            "object_key": object_key,
+            "result": rows[0] if rows else None
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
